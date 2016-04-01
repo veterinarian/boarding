@@ -1,0 +1,28 @@
+body {
+    font-family: sans-serif;
+    font-size: 12pt;
+}
+
+table.cal {
+    border-collapse: collapse;
+}
+.cal .hdr {
+    font-weight: bold;
+}
+
+.cal .row {
+}
+
+.cal td {
+    width: 2em;
+    height: 14pt;
+    border: 1px solid;
+}
+
+.available {
+    background-color: #2F2;
+}
+
+.occupied {
+    background-color: #F22;
+}
