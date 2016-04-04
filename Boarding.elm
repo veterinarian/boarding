@@ -1,19 +1,22 @@
 module Boarding where
 
 import Html exposing (..)
-import Html.Attributes exposing (class, type', placeholder, value)
-import Html.Events exposing (onClick)
+import Html.Attributes exposing (class, type', placeholder, value, disabled)
+import Html.Events exposing (onClick, on, targetValue)
 import Date exposing (Date, fromString, day)
 import Date.Duration exposing (Duration(Day))
 import Date.Compare exposing (is, Compare2(SameOrAfter, SameOrBefore))
 import Date.Format
+import Result.Extra exposing (isOk, isErr)
 
 type alias Pet = { name: String, client: String }
 
-type Action = NoBookingAction | Add Booking | Cancel Booking | CheckIn Booking | CheckOut Booking
-              | Entry { pet: Pet, from: String, to: String }
+type Field = PetName | ClientName | From | To
 
-update: Action -> Model -> Model
+type Action = NoBookingAction | Add Booking | Cancel Booking | CheckIn Booking | CheckOut Booking
+              | Entry Field String
+
+update : Action -> Model -> Model
 update action model = 
   case action of 
     NoBookingAction -> model
@@ -21,7 +24,15 @@ update action model =
       if (isOverlapped booking model.bookings)
       then model
       else { model | bookings = booking::model.bookings }
-    Entry e -> { model | entry = e }
+    Entry fld str ->
+      let 
+        e = model.entry
+        p = model.entry.pet
+      in case fld of
+        PetName -> { model | entry = { e | pet = { p | name = str } } }
+        ClientName -> { model | entry = { e | pet = { p | client = str } } }
+        From -> { model | entry = { e | from = str } }
+        To -> { model | entry = { e | to = str } }
     otherwise -> model
 
 isOverlapped booking bookings =
@@ -79,16 +90,46 @@ printBookings =
           ++ Date.Format.isoString bk.from 
           ++ " -> " ++ Date.Format.isoString bk.to) 
       ])
-    
+
+onInput : Signal.Address a -> (String -> a) -> Attribute
+onInput address contentToValue =
+  on "input" targetValue (\str -> Signal.message address (contentToValue str))
+
+inputField : Signal.Address a -> String -> String -> (String -> a) -> Html 
+inputField address p v contentToValue =
+  input [ placeholder p, value v, onInput address contentToValue ] []
+
+resMsg r =
+  case r of
+    Ok _ -> ""
+    Err msg -> msg
+
 view : Signal.Address Action -> Model -> Html
 view address model = 
-  div []
-    (List.append (printBookings model.bookings) 
-      [ form []
-        [ input [ placeholder "Pet name", value model.entry.pet.name ] []
-        , input [ placeholder "Client name", value model.entry.pet.client ] [] 
-        , input [ placeholder "From", value model.entry.from ] [] 
-        , input [ placeholder "To", value model.entry.from ] []
-        , input [ type' "button" ] []
-        ]
-      ])
+  let 
+    petOk = model.entry.pet.name /= ""
+    clientOk = model.entry.pet.name /= ""
+    fromRes = Date.fromString model.entry.from
+    toRes = Date.fromString model.entry.to
+    isValid = (petOk && clientOk && isOk fromRes && isOk toRes)
+  in
+    div []
+      (List.append (printBookings model.bookings) 
+        [ form []
+          [ inputField address "Pet name" model.entry.pet.name (Entry PetName)
+          , br [] []
+          , inputField address "Client" model.entry.pet.client (Entry ClientName)
+          , br [] []
+          , inputField address "From" model.entry.from (Entry From)
+          , text (resMsg fromRes)
+          , br [] []
+          , inputField address "To" model.entry.to (Entry To)
+          , text (resMsg toRes)
+          , br [] []
+          , input [ type' "button"
+                  , disabled (not isValid) 
+                  , value "Add"
+                  ] [text "Add"]
+          ]
+        , text model.entry.pet.name
+        ])
