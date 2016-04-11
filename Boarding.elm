@@ -5,7 +5,8 @@ import Html.Attributes exposing (class, type', placeholder, value, disabled)
 import Html.Events exposing (onClick, on, targetValue)
 import Date exposing (Date, fromString, day)
 import Date.Duration exposing (Duration(Day))
-import Date.Compare exposing (is, Compare2(SameOrAfter, SameOrBefore))
+import Date.Compare exposing (is3, Compare3(Between, BetweenOpenStart
+                                           , BetweenOpenEnd, BetweenOpen))
 import Date.Format
 import Result.Extra exposing (isOk, isErr)
 
@@ -33,15 +34,30 @@ update action model =
         ClientName -> { model | entry = { e | pet = { p | client = str } } }
         From -> { model | entry = { e | from = str } }
         To -> { model | entry = { e | to = str } }
+    Cancel booking ->
+      let repl b =
+        if booking == b then { booking | status = Cancelled } else b
+      in { model | bookings = (List.map repl model.bookings) }
     otherwise -> model
+
+isCancelled booking =
+  case booking.status of
+    Cancelled -> True
+    otherwise -> False
+
+hasOverlappedDates bk1 bk2 =
+  is3 BetweenOpen bk1.to bk2.to bk2.from 
+  || is3 BetweenOpen bk1.from bk2.to bk1.from 
 
 isOverlapped booking bookings =
   let ov bk1 bk2 =
-    bk1.pet == bk2.pet
-    && (is SameOrAfter bk1.to bk2.from || is SameOrBefore bk1.from bk2.to )
+    not (isCancelled bk1) 
+    && not (isCancelled bk2) -- if one is cancelled, they do not overlap.
+    && bk1.pet == bk2.pet 
+    && hasOverlappedDates bk1 bk2
   in not (List.isEmpty (List.filter (ov booking) bookings))
   
-type Status = Reserved | CheckedIn Date | CheckedOut Date | Cancelled Date
+type Status = Reserved | CheckedIn Date | CheckedOut Date | Cancelled --Date
 
 type alias Booking = 
   { pet: Pet
@@ -81,14 +97,18 @@ dayString resdate =
 --          _ -> (tr [ class "row" ] (List.map (\x -> avail x n) dates)) :: (r (n-1) dates)
 --  in List.reverse (r n dates)
 
-printBookings : List Booking -> List Html
-printBookings = 
+printBookings : Signal.Address Action -> List Booking -> List Html
+printBookings address =
   List.map 
     (\bk -> div [] 
       [ text (bk.pet.client 
           ++ ", " ++ bk.pet.name ++ ":"
           ++ Date.Format.isoString bk.from 
-          ++ " -> " ++ Date.Format.isoString bk.to) 
+          ++ " -> " ++ Date.Format.isoString bk.to)
+      , button 
+          [ onClick address (Cancel bk)
+          ]
+          [ text "Cancel" ]
       ])
 
 onInput : Signal.Address a -> (String -> a) -> Attribute
@@ -112,9 +132,24 @@ view address model =
     fromRes = Date.fromString model.entry.from
     toRes = Date.fromString model.entry.to
     isValid = (petOk && clientOk && isOk fromRes && isOk toRes)
+    booking = 
+      if not isValid 
+      then Nothing 
+      else 
+        case fromRes of
+          Err _ -> Nothing
+          Ok from -> case toRes of
+            Err _ -> Nothing
+            Ok to -> 
+              Just { pet = { name = model.entry.pet.name
+                           , client = model.entry.pet.client }
+                   , status = Reserved
+                   , from = from
+                   , to = to
+                   }
   in
     div []
-      (List.append (printBookings model.bookings) 
+      (List.append (printBookings address model.bookings) 
         [ form []
           [ inputField address "Pet name" model.entry.pet.name (Entry PetName)
           , br [] []
@@ -127,6 +162,10 @@ view address model =
           , text (resMsg toRes)
           , br [] []
           , input [ type' "button"
+                  , onClick address 
+                     (case booking of 
+                        Nothing -> NoBookingAction
+                        Just b -> Add b)
                   , disabled (not isValid) 
                   , value "Add"
                   ] [text "Add"]
