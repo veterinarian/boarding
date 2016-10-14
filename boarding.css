@@ -8,6 +8,7 @@ table.cal {
 }
 .cal .hdr {
     font-weight: bold;
+    text-align: center;
 }
 
 .cal .row {
