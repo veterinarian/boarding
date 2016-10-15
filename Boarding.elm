@@ -12,7 +12,7 @@ import Date.Compare exposing (is, Compare2(After), is3, Compare3(BetweenOpen))
 import List.Extra exposing (unfoldr)
 import Effects exposing (Effects, Never)
 import Task exposing (Task)
-import TaskTutorial exposing (getCurrentTime)
+import CurrentTime exposing (getCurrentTime)
 
 main = app.html
        
