@@ -1,6 +1,6 @@
 module Boarding where
 
-import StartApp.Simple exposing (start)
+import StartApp exposing (start)
 import Html exposing (..)
 import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
@@ -10,19 +10,46 @@ import Date.Duration exposing (Duration(Day))
 import Maybe exposing (Maybe(Just, Nothing))
 import Date.Compare exposing (is, Compare2(After), is3, Compare3(BetweenOpen))
 import List.Extra exposing (unfoldr)
+import Effects exposing (Effects, Never)
+import Task exposing (Task)
+import TaskTutorial exposing (getCurrentTime)
 
-main =
+main = app.html
+       
+app =
   start
-    { model = model
+    { init = (model, resetDate)
     , update = update
     , view = view
+    , inputs = []
     }
+
+resetDate = Effects.task
+            <| Task.map (\d -> SetCal (Date.fromTime d))
+            <| getCurrentTime
+            
+port tasks : Signal (Task Never ())
+port tasks = app.tasks
 
 type Action = NoAction
             | AddBooking Booking
             | DeleteBooking Booking
-
-update _ model = model
+            | SetCal Date
+            | ResetDate
+              
+update action model =
+  case action of
+    SetCal date ->
+      ( { model |
+            cal = makeCalFromDates
+              (Date.Duration.add Day -3 date)
+              (Date.Duration.add Day 27 date)
+        , curDate = date
+        }
+      , Effects.none
+      )
+    ResetDate -> (model, resetDate)
+    _ -> (model, Effects.none)
 
 type alias Booking = { name: String, fromDate: Date, toDate: Date }
 
@@ -32,6 +59,7 @@ type alias Model = { runs: Int
                    , from: Maybe Date
                    , to: Maybe Date
                    , cal: List Date
+                   , curDate: Date
                    }
 
 testBookings : List Booking
@@ -49,7 +77,8 @@ model = { runs = 5
         , bookings = testBookings
         , from = Nothing
         , to = Nothing
-        , cal = makeCalFromStrings "10/10/2016" "10/16/2016"
+        , cal = []
+        , curDate = Date.fromTime 0
         }
 
 dateFromString : String -> Date
@@ -104,5 +133,10 @@ view address model =
                          td [] [ text (dayString date) ])
                       model.cal))
         :: rooms model.runs (occupancyOf model))
+    , div []
+        [ button [ onClick address <| SetCal (Date.Duration.add Day -20 model.curDate) ] [ text "<" ]
+        , button [ onClick address ResetDate ] [ text "Reset to Current Date" ]
+        , button [ onClick address <| SetCal (Date.Duration.add Day 20 model.curDate) ] [ text ">" ]
+        ]
     ]
 
